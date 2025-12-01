@@ -25,12 +25,12 @@ jobs:
             set -e
 
             # === Ajuste aqui o caminho da API na VPS ===
-            APP_DIR="/root/apps/coffe_cake_api"
+            APP_DIR="/root/apps/coffe_cake_backend"
             APP_PARENT_DIR="$(dirname "$APP_DIR")"
             APP_FOLDER_NAME="$(basename "$APP_DIR")"
 
             # === Ajuste aqui o nome do repositório do backend no GitHub ===
-            REPO_URL="https://$GH_PAT@github.com/arleynm/coffe_cake_api.git"
+            REPO_URL="https://$GH_PAT@github.com/arleynm/coffe_cake_backend.git"
 
             echo "Verificando se o diretório $APP_DIR existe..."
 
