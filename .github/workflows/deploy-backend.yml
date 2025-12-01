@@ -1,0 +1,92 @@
+name: Deploy API to VPS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (para ler arquivos do repo)
+        uses: actions/checkout@v4
+
+      - name: SSH into VPS and deploy API
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}  
+          key: ${{ secrets.SSH_KEY }}         
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: false
+          envs: GH_PAT
+          script: |
+            set -e
+
+            # === Ajuste aqui o caminho da API na VPS ===
+            APP_DIR="/root/apps/coffe_cake_api"
+            APP_PARENT_DIR="$(dirname "$APP_DIR")"
+            APP_FOLDER_NAME="$(basename "$APP_DIR")"
+
+            # === Ajuste aqui o nome do repositório do backend no GitHub ===
+            REPO_URL="https://$GH_PAT@github.com/arleynm/coffe_cake_api.git"
+
+            echo "Verificando se o diretório $APP_DIR existe..."
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Primeira vez? Clonando repo da API em $APP_DIR ..."
+              mkdir -p "$APP_PARENT_DIR"
+              cd "$APP_PARENT_DIR"
+              git clone "$REPO_URL" "$APP_FOLDER_NAME"
+              cd "$APP_DIR"
+            else
+              echo "Diretório da API existe. Atualizando código..."
+              cd "$APP_DIR"
+              git remote set-url origin "$REPO_URL"
+              git fetch --all
+              git reset --hard origin/main
+            fi
+
+            echo "Checando se Node.js está instalado..."
+            if ! command -v node >/dev/null 2>&1; then
+              echo "Node não encontrado. Instalando Node.js 20.x..."
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+              DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+            fi
+
+            echo "Node e npm versões:"
+            node -v
+            npm -v
+
+            echo "Instalando pm2 globalmente (se ainda não tiver)..."
+            npm install -g pm2
+
+            echo "Instalando dependências da API..."
+            cd "$APP_DIR"
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
+
+            echo "Buildando API (NestJS)..."
+            npm run build
+
+            echo "Rodando migrations do Prisma..."
+            npx prisma migrate deploy
+
+            echo "Gerando client do Prisma..."
+            npx prisma generate
+
+            echo "Subindo API com PM2 (processo: coffe-cake-api)..."
+            if pm2 describe coffe-cake-api > /dev/null 2>&1; then
+              pm2 restart coffe-cake-api
+            else
+              # se preferir usar ecosystem.config.cjs, podemos trocar aqui depois
+              pm2 start "node dist/main.js" --name coffe-cake-api
+            fi
+
+            pm2 save
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}

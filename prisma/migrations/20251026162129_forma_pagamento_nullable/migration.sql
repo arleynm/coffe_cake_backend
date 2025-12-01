@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `pedido` MODIFY `formaPagamento` ENUM('DINHEIRO', 'PIX', 'CARTAO_CREDITO', 'CARTAO_DEBITO') NULL;
