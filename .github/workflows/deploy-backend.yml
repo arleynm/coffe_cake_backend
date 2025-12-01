@@ -43,10 +43,21 @@ jobs:
             else
               echo "Diretório da API existe. Atualizando código..."
               cd "$APP_DIR"
-              git remote set-url origin "$REPO_URL"
+
+              echo "Configurando remote 'origin'..."
+              if git remote get-url origin >/dev/null 2>&1; then
+                echo "Remote 'origin' já existe. Atualizando URL..."
+                git remote set-url origin "$REPO_URL"
+              else
+                echo "Remote 'origin' não existe. Criando..."
+                git remote add origin "$REPO_URL"
+              fi
+
+              echo "Buscando alterações..."
               git fetch --all
               git reset --hard origin/main
             fi
+
 
             echo "Checando se Node.js está instalado..."
             if ! command -v node >/dev/null 2>&1; then
