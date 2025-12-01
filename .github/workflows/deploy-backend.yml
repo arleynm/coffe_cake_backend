@@ -85,7 +85,7 @@ jobs:
             npm run build
 
             echo "Rodando migrations do Prisma..."
-            npx prisma migrate deploy
+            npx prisma db push
 
             echo "Gerando client do Prisma..."
             npx prisma generate
