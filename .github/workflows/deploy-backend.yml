@@ -2,7 +2,7 @@ name: Deploy API to VPS
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main ]   # se sua branch de produção for outra, muda aqui
 
 jobs:
   deploy:
