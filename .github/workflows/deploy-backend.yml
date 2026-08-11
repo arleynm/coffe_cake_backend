@@ -94,11 +94,12 @@ jobs:
             echo "Buildando API (NestJS)..."
             npm run build
 
-            # ⚠️ `prisma db push` foi REMOVIDO de propósito.
-            # O banco de produção diverge do schema atual e um push apagaria dados
-            # (produtos, pedidos, usuário). A migração do banco é feita à parte,
-            # manualmente e com cuidado. O deploy NUNCA modifica/apaga o banco.
-            echo "Pulando prisma db push (migracao de banco feita manualmente e com cuidado)."
+            # Sincroniza o schema com o banco de forma ADITIVA e SEGURA.
+            # SEM --accept-data-loss de propósito: aplica colunas/tabelas novas
+            # preservando os dados; se detectar qualquer mudança destrutiva,
+            # o comando PARA sozinho (nunca apaga dados de produção).
+            echo "Aplicando schema no banco (aditivo, sem apagar dados)..."
+            npx prisma db push
 
             echo "Subindo API com PM2 (processo: coffe-cake-api)..."
             if pm2 describe coffe-cake-api > /dev/null 2>&1; then
