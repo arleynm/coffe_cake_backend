@@ -25,7 +25,7 @@ jobs:
             set -e
 
             # === Ajuste aqui o caminho da API na VPS ===
-            APP_DIR="/root/apps/coffe_cake_backend"
+            APP_DIR="/home/deploy/apps/coffe_cake_backend"
             APP_PARENT_DIR="$(dirname "$APP_DIR")"
             APP_FOLDER_NAME="$(basename "$APP_DIR")"
 
