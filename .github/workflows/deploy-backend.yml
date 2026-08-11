@@ -94,11 +94,11 @@ jobs:
             echo "Buildando API (NestJS)..."
             npm run build
 
-            echo "Rodando migrations do Prisma..."
-            npx prisma db push
-
-            echo "Gerando client do Prisma..."
-            npx prisma generate
+            # ⚠️ `prisma db push` foi REMOVIDO de propósito.
+            # O banco de produção diverge do schema atual e um push apagaria dados
+            # (produtos, pedidos, usuário). A migração do banco é feita à parte,
+            # manualmente e com cuidado. O deploy NUNCA modifica/apaga o banco.
+            echo "Pulando prisma db push (migracao de banco feita manualmente e com cuidado)."
 
             echo "Subindo API com PM2 (processo: coffe-cake-api)..."
             if pm2 describe coffe-cake-api > /dev/null 2>&1; then
