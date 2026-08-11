@@ -1,15 +1,26 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   constructor() {
+    const databaseUrl = process.env.DATABASE_URL?.trim();
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL não configurada');
+    }
+
+    const adapter = new PrismaMariaDb(databaseUrl);
+
     super({
-      datasources: { db: { url: process.env.DATABASE_URL } },
-      // Logs úteis em dev; em prod, normalmente só 'error'
-      log: process.env.NODE_ENV === 'development'
-        ? ['warn', 'error'] // se quiser ver queries: [{ emit: 'event', level: 'query' }]
-        : ['error'],
+      adapter,
+      log:
+        process.env.NODE_ENV === 'development'
+          ? ['warn', 'error']
+          : ['error'],
     });
   }
 

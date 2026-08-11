@@ -1,21 +1,19 @@
-// src/domain/dashboard/dashboard-metrics.ts
-
 export type RevenuePoint = {
-  label: string;   // ex.: "06h", "01", "Jan"
-  value: number;   // valor em dinheiro (R$) ou quantidade
+  label: string; 
+  value: number;   
 };
 
 export type CategorySlice = {
-  name: string;    // ex.: "Cafés", "Salgados"
-  value: number;   // quantidade de itens vendidos
+  name: string;  
+  value: number; 
 };
 
 export type RecentOrder = {
   id: string;
   numero: number;
   mesa: string;
-  total: number;   // R$
-  status: string;  // PedidoStatus (RECEBIDO, ENTREGUE, etc.)
+  total: number;   
+  status: string;  
   createdAt: Date;
 };
 
@@ -28,9 +26,9 @@ export type KpiMetrics = {
 
 export type DashboardMetrics = {
   kpis: KpiMetrics;
-  revenueByHour: RevenuePoint[];       // hoje, 06h–20h
-  revenueByDayInMonth: RevenuePoint[]; // dias do mês atual
-  revenueByMonthInYear: RevenuePoint[];// meses do ano atual
-  categories: CategorySlice[];         // pizza: cafés, salgados, bolos, etc.
-  recent: RecentOrder[];               // últimos pedidos
+  revenueByHour: RevenuePoint[];     
+  revenueByDayInMonth: RevenuePoint[]; 
+  revenueByMonthInYear: RevenuePoint[];
+  categories: CategorySlice[];         
+  recent: RecentOrder[];              
 };

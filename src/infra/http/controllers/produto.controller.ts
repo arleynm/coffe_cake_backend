@@ -17,6 +17,9 @@ import { ListProdutos } from '../../../application/use-cases/produto/list-produt
 import { CreateProdutoDto } from '../dtos/create-produto.dto';
 import { UpdateProdutoDto, IdParamDto } from '../dtos/update-produto.dto';
 import { QueryProdutoDto } from '../dtos/query-produto.dto';
+import { Public } from '../../auth/public.decorator';
+import { PrismaService } from '../../db/prisma.service';
+import { MenuEventsService } from '../../../menu/menu-events.service';
 
 // -------- schemas para campos complexos enviados como JSON (tamanhos/adicionais)
 const TamanhoSchema = z.object({
@@ -31,6 +34,12 @@ const AdicionalSchema = z.object({
   ativo: z.coerce.boolean().optional(),
 });
 const AdicionaisSchema = z.array(AdicionalSchema);
+
+const FichaTecnicaItemSchema = z.object({
+  insumoId: z.string().min(1),
+  quantidade: z.coerce.number().positive(),
+});
+const FichaTecnicaSchema = z.array(FichaTecnicaItemSchema);
 
 // -------- helpers de coerção
 function fieldToString(v: unknown): string | undefined {
@@ -125,7 +134,46 @@ export class ProdutoController {
     private readonly deleteUC: DeleteProduto,
     private readonly getUC: GetProduto,
     private readonly listUC: ListProdutos,
+    private readonly prisma: PrismaService,
+    private readonly menuEvents: MenuEventsService,
   ) {}
+
+  /** Promoção do dia atual (público — usado no card da sidebar/cardápio). */
+  @Public()
+  @Get('promocao')
+  async promocao() {
+    const p = await this.prisma.produto.findFirst({
+      where: { promocaoAtiva: true, ativo: true },
+      include: { categoria: true },
+    });
+    if (!p) return null;
+    return {
+      id: p.id,
+      nome: p.nome,
+      categoria: p.categoria?.nome ?? null,
+      preco: Number(p.promocaoPreco ?? p.precoVenda),
+      precoOriginal: Number(p.precoVenda),
+      imagemUrl: p.imagemUrl,
+    };
+  }
+
+  /** Define/remove a promoção do dia (apenas 1 por vez). */
+  @Put(':id/promocao')
+  async setPromocao(@Param() { id }: IdParamDto, @Body() body: { ativa?: boolean; preco?: number | null }) {
+    if (body?.ativa) {
+      await this.prisma.$transaction([
+        this.prisma.produto.updateMany({ where: { promocaoAtiva: true }, data: { promocaoAtiva: false } }),
+        this.prisma.produto.update({
+          where: { id },
+          data: { promocaoAtiva: true, promocaoPreco: body.preco != null ? Number(body.preco) : null },
+        }),
+      ]);
+    } else {
+      await this.prisma.produto.update({ where: { id }, data: { promocaoAtiva: false } });
+    }
+    this.menuEvents.emit('menu.promocao', { id, ativa: !!body?.ativa });
+    return { ok: true };
+  }
 
   @Post()
   async create(@Req() req: FastifyRequest) {
@@ -133,6 +181,7 @@ export class ProdutoController {
 
     const tamanhos   = json(fields.tamanhos, TamanhosSchema);
     const adicionais = json(fields.adicionais, AdicionaisSchema);
+    const fichaTecnica = json(fields.fichaTecnica, FichaTecnicaSchema);
 
     console.log('[POST /produtos] fields =', fields);
 
@@ -149,10 +198,12 @@ export class ProdutoController {
       imagemUrl: savedFile ? savedFile.url : (fields.imagemUrl || null),
       tamanhos,
       adicionais,
+      fichaTecnica,
     };
 
 
     const p = await this.createUC.exec(input);
+    this.menuEvents.emit('produto.created', { id: (p as any)?.id ?? null });
     return { data: p };
   }
 
@@ -163,6 +214,7 @@ export class ProdutoController {
     const patch: UpdateProdutoDto = {};
     const tamanhos   = json(fields.tamanhos, TamanhosSchema);
     const adicionais = json(fields.adicionais, AdicionaisSchema);
+    const fichaTecnica = json(fields.fichaTecnica, FichaTecnicaSchema);
 
     if (fields.nome !== undefined) patch.nome = fields.nome;
     if (fields.categoriaId !== undefined) patch.categoriaId = fields.categoriaId;
@@ -173,6 +225,7 @@ export class ProdutoController {
     if (fields.exibirNoCardapio !== undefined) patch.exibirNoCardapio = toBool(fields.exibirNoCardapio);
     if (tamanhos !== undefined) patch.tamanhos = tamanhos;
     if (adicionais !== undefined) patch.adicionais = adicionais;
+    if (fichaTecnica !== undefined) patch.fichaTecnica = fichaTecnica;
 
     if (savedFile) {
       patch.imageId = undefined;
@@ -182,21 +235,25 @@ export class ProdutoController {
     }
 
     const p = await this.updateUC.exec({ id, patch });
+    this.menuEvents.emit('produto.updated', { id });
     return { data: p };
   }
 
   @Delete(':id')
   async delete(@Param() { id }: IdParamDto) {
     await this.deleteUC.exec(id);
+    this.menuEvents.emit('produto.deleted', { id });
     return { ok: true };
   }
 
+  @Public()
   @Get(':id')
   async get(@Param() { id }: IdParamDto) {
     const p = await this.getUC.exec(id);
     return { data: p };
   }
 
+  @Public()
   @Get()
   async list(@Query() q: QueryProdutoDto) {
     const res = await this.listUC.exec({

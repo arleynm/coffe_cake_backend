@@ -4,6 +4,7 @@ export type PedidoStatus = 'RECEBIDO'|'PREPARO'|'PRONTO'|'ENTREGUE'|'CANCELADO';
 
 // ✅ novo enum simples para pagamento
 export type FormaPagamento = 'PIX'|'DINHEIRO'|'CARTAO_CREDITO'|'CARTAO_DEBITO';
+export type TipoAtendimento = 'LOCAL'|'RETIRADA'|'ENTREGA';
 
 export class PedidoItemAdicional {
   constructor(
@@ -38,12 +39,27 @@ export class Pedido {
     public updatedAt: Date = new Date(),
     // ✅ novo campo opcional
     public formaPagamento: FormaPagamento | null = null,
+    public tipoAtendimento: TipoAtendimento = 'LOCAL',
+    public clienteNome: string | null = null,
+    public clienteTelefone: string | null = null,
+    public deliveryZoneId: string | null = null,
+    public enderecoCep: string | null = null,
+    public enderecoRua: string | null = null,
+    public enderecoNumero: string | null = null,
+    public enderecoBairro: string | null = null,
+    public enderecoCidade: string | null = null,
+    public enderecoUf: string | null = null,
+    public enderecoComplemento: string | null = null,
+    public taxaEntrega: number = 0,
+    public entregaLatitude: number | null = null,
+    public entregaLongitude: number | null = null,
+    public entregaPrevistaEm: Date | null = null,
   ) {}
 
   private touch() { this.updatedAt = new Date(); }
 
   total(): number {
-    return Number(this.itens.reduce((acc, it) => acc + it.subtotal(), 0).toFixed(2));
+    return Number((this.itens.reduce((acc, it) => acc + it.subtotal(), 0) + this.taxaEntrega).toFixed(2));
   }
 
   /**

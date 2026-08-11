@@ -1,10 +1,53 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
+}
+
+enum AppNotificationType {
+  PEDIDO_CRIADO
+  PEDIDO_ATUALIZADO
+  PEDIDO_CANCELADO
+}
+
+model AppNotification {
+  id         String              @id @default(cuid())
+  type       AppNotificationType
+  title      String
+  body       String
+  data       Json?
+  isRead     Boolean             @default(false)
+  createdAt  DateTime            @default(now())
+  readAt     DateTime?
+
+  @@index([createdAt])
+  @@index([isRead])
+
+  @@map("appnotification")
+}
+model NotificationToken {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String?
+  platform   String   @default("web")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user Usuario? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isActive])
+
+  @@map("notificationtoken")
+}
+
+enum Role {
+  ADMIN
+  STAFF
 }
 
 model Usuario {
@@ -12,17 +55,22 @@ model Usuario {
   nome      String
   email     String   @unique
   senhaHash String
+  role      Role     @default(ADMIN)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  notificationTokens NotificationToken[]
   refreshTokens RefreshToken[]
+
+  @@map("usuario")
 }
 
 model RefreshToken {
   id        String    @id @default(cuid())
   userId    String
   hashed    String
+  sha256    String?
   userAgent String?
   ip        String?
   expiresAt DateTime
@@ -33,6 +81,9 @@ model RefreshToken {
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([sha256])
+
+  @@map("refreshtoken")
 }
 
 enum TipoMovimento {
@@ -49,16 +100,17 @@ enum TipoMovimento {
 
 model Unidade {
   id        String   @id @default(cuid())
-  codigo    String   @unique // "kg","g","L","ml","un"
+  codigo    String   @unique
   nome      String
   fatorBase Float
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Back-relations (obrigatórios pq há múltiplas relações com Unidade)
   conversoesDe   ConversaoUnidade[] @relation("de")
   conversoesPara ConversaoUnidade[] @relation("para")
   insumosBase    Insumo[]           @relation("InsumoUnidadeBase")
+
+  @@map("unidade")
 }
 
 model Insumo {
@@ -74,8 +126,10 @@ model Insumo {
 
   lotes             Lote[]
   movimentos        MovimentoEstoque[]
-  // ⬇️ back-relation para PedidoCompraItem.insumo
   pedidoCompraItens PedidoCompraItem[]
+  fichasTecnicas    ProdutoInsumo[]
+
+  @@map("insumo")
 }
 
 model ConversaoUnidade {
@@ -83,10 +137,12 @@ model ConversaoUnidade {
   deId   String
   paraId String
 
-  de   Unidade @relation("de", fields: [deId], references: [id]) // <- aqui tava "ded"
+  de   Unidade @relation("de", fields: [deId], references: [id])
   para Unidade @relation("para", fields: [paraId], references: [id])
 
   fator Float
+
+  @@map("conversaounidade")
 }
 
 model Deposito {
@@ -98,8 +154,9 @@ model Deposito {
 
   movimentos        MovimentoEstoque[]
   lotes             Lote[]
-  // ⬇️ back-relation para PedidoCompraItem.deposito
   pedidoCompraItens PedidoCompraItem[]
+
+  @@map("deposito")
 }
 
 model Lote {
@@ -114,6 +171,8 @@ model Lote {
   insumo     Insumo             @relation(fields: [insumoId], references: [id])
   deposito   Deposito           @relation(fields: [depositoId], references: [id])
   movimentos MovimentoEstoque[]
+
+  @@map("lote")
 }
 
 model MovimentoEstoque {
@@ -123,7 +182,7 @@ model MovimentoEstoque {
   loteId         String?
   tipo           TipoMovimento
   quantidadeBase Float
-  custoUnitario  Decimal?      @db.Decimal(14, 4) // MySQL
+  custoUnitario  Decimal?      @db.Decimal(14, 4)
   documentoRef   String?
   observacao     String?
   createdAt      DateTime      @default(now())
@@ -135,17 +194,21 @@ model MovimentoEstoque {
   @@index([insumoId, depositoId])
   @@index([loteId])
   @@index([createdAt])
+
+  @@map("movimentoestoque")
 }
 
 model PedidoCompra {
   id         String   @id @default(cuid())
   numero     String   @unique
   fornecedor String?
-  status     String   @default("ABERTO") // ABERTO, RECEBIDO, CANCELADO
+  status     String   @default("ABERTO")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   itens PedidoCompraItem[]
+
+  @@map("pedidocompra")
 }
 
 model PedidoCompraItem {
@@ -165,6 +228,8 @@ model PedidoCompraItem {
   @@index([pedidoCompraId])
   @@index([insumoId])
   @@index([depositoId])
+
+  @@map("pedidocompraitem")
 }
 
 enum Tamanho {
@@ -182,6 +247,8 @@ model Media {
   createdAt DateTime @default(now())
 
   produtos Produto[]
+
+  @@map("media")
 }
 
 model CategoriaCardapio {
@@ -198,6 +265,8 @@ model CategoriaCardapio {
   @@unique([nome])
   @@index([ativo])
   @@index([ordem])
+
+  @@map("categoriacardapio")
 }
 
 model Produto {
@@ -209,26 +278,46 @@ model Produto {
   precoVenda       Decimal  @db.Decimal(14, 2)
   ativo            Boolean  @default(true)
   exibirNoCardapio Boolean  @default(true)
+  promocaoAtiva    Boolean  @default(false)
+  promocaoPreco    Decimal? @db.Decimal(14, 2)
   imageId          String?
   imagemUrl        String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  // Relações existentes
   categoria  CategoriaCardapio  @relation(fields: [categoriaId], references: [id])
   image      Media?             @relation(fields: [imageId], references: [id])
   tamanhos   ProdutoTamanho[]
   adicionais ProdutoAdicional[]
-
-  // 👇 back-relation que estava faltando
-  pedidoItens PedidoItem[] // <— ADICIONE ESTA LINHA
+  fichaTecnica ProdutoInsumo[]
+  pedidoItens PedidoItem[]
 
   @@index([categoriaId])
   @@index([ativo, exibirNoCardapio])
   @@index([createdAt])
+
+  @@map("produto")
 }
 
-// Variação de tamanho por produto (P/M/G) com acréscimo sobre o precoVenda
+/// Ficha técnica: insumos consumidos por 1 unidade do produto (na unidade base do insumo).
+model ProdutoInsumo {
+  id         String   @id @default(cuid())
+  produtoId  String
+  insumoId   String
+  quantidade Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  insumo  Insumo  @relation(fields: [insumoId], references: [id])
+
+  @@unique([produtoId, insumoId])
+  @@index([produtoId])
+  @@index([insumoId])
+
+  @@map("produtoinsumo")
+}
+
 model ProdutoTamanho {
   id        String  @id @default(cuid())
   produtoId String
@@ -237,11 +326,12 @@ model ProdutoTamanho {
 
   produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
 
-  @@unique([produtoId, tamanho]) // um tamanho por produto
+  @@unique([produtoId, tamanho])
   @@index([produtoId])
+
+  @@map("produtotamanho")
 }
 
-// Adicionais específicos do produto (nome + preço do adicional)
 model ProdutoAdicional {
   id        String  @id @default(cuid())
   produtoId String
@@ -251,8 +341,10 @@ model ProdutoAdicional {
 
   produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
 
-  @@unique([produtoId, nome]) // evita duplicar “Queijo extra” no mesmo produto
+  @@unique([produtoId, nome])
   @@index([produtoId, ativo])
+
+  @@map("produtoadicional")
 }
 
 enum PedidoStatus {
@@ -270,40 +362,133 @@ enum FormaPagamento {
   CARTAO_DEBITO
 }
 
-model Pedido {
-  id          String       @id @default(cuid())
-  numero      Int          @unique @default(autoincrement())
-  mesa        String
-  observacoes String?
-  status      PedidoStatus @default(RECEBIDO)
-
-  total       Decimal      @db.Decimal(14, 2)
-
-  // 👇 novo campo
-  formaPagamento FormaPagamento?
-
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  itens PedidoItem[]
-
-  @@index([status, createdAt])
-  @@index([formaPagamento]) // (opcional) útil para relatórios por forma
+enum TipoAtendimento {
+  LOCAL
+  RETIRADA
+  ENTREGA
 }
 
+model DeliveryConfig {
+  id              String   @id @default("default")
+  deliveryAtivo   Boolean  @default(false)
+  lojaAberta      Boolean  @default(false)
+  retiradaAtiva   Boolean  @default(true)
+  tempoMinimo     Int      @default(35)
+  tempoMaximo     Int      @default(55)
+  pedidoMinimo    Decimal  @default(0) @db.Decimal(14, 2)
+  lojaLatitude    Decimal? @db.Decimal(10, 7)
+  lojaLongitude   Decimal? @db.Decimal(10, 7)
+  mapaZoom        Int      @default(13)
+  cobrarPorKm     Boolean  @default(false)
+  taxaBaseKm      Decimal  @default(0) @db.Decimal(14, 2)
+  precoPorKm      Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt       DateTime @updatedAt
 
-/**
- * Itens do pedido com "snapshot" de preço e nome.
- * Mantemos uma FK opcional para Produto (para rastreabilidade),
- * mas o cálculo/visão usa os campos "nome" e "precoUnit" salvos no momento da venda.
- */
+  @@map("deliveryconfig")
+}
+
+model DeliveryZone {
+  id           String   @id @default(cuid())
+  nome         String
+  bairros      Json
+  prefixosCep  Json
+  poligono     Json?
+  raioMetros   Int?     // zona por raio (círculo concêntrico ao redor da loja) — estilo iFood
+  cor          String   @default("#b65d24")
+  taxa         Decimal  @db.Decimal(14, 2)
+  pedidoMinimo Decimal  @default(0) @db.Decimal(14, 2)
+  tempoMinimo  Int?
+  tempoMaximo  Int?
+  ativa        Boolean  @default(true)
+  ordem        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  pedidos Pedido[]
+
+  @@index([ativa, ordem])
+  @@map("deliveryzone")
+}
+
+model CaixaTurno {
+  id             String    @id @default(cuid())
+  status         String    @default("aberto") // 'aberto' | 'fechado'
+  aberturaValor  Decimal   @db.Decimal(14, 2)
+  abertoPor      String?
+  abertoEm       DateTime  @default(now())
+  fechadoEm      DateTime?
+  fechadoPor     String?
+  valorDeclarado Decimal?  @db.Decimal(14, 2)
+  diferenca      Decimal?  @db.Decimal(14, 2)
+
+  movimentos CaixaMovimento[]
+
+  @@index([status])
+  @@map("caixaturno")
+}
+
+model CaixaMovimento {
+  id           String   @id @default(cuid())
+  turnoId      String
+  tipo         String   // 'venda' | 'despesa' | 'suprimento' | 'sangria' | 'estorno'
+  metodo       String?  // 'dinheiro' | 'cartao' | 'pix' | 'vr' | null
+  valor        Decimal  @db.Decimal(14, 2)
+  pedidoNumero Int?
+  descricao    String?
+  createdAt    DateTime @default(now())
+
+  turno CaixaTurno @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+
+  @@index([turnoId])
+  @@map("caixamovimento")
+}
+
+model Pedido {
+  id            String       @id @default(cuid())
+  numero        Int          @unique @default(autoincrement())
+  mesa          String
+  observacoes   String?
+  status        PedidoStatus @default(RECEBIDO)
+  total         Decimal      @db.Decimal(14, 2)
+  formaPagamento FormaPagamento?
+  tipoAtendimento TipoAtendimento @default(LOCAL)
+  clienteNome     String?
+  clienteTelefone String?
+  deliveryZoneId  String?
+  enderecoCep     String?
+  enderecoRua     String?
+  enderecoNumero  String?
+  enderecoBairro  String?
+  enderecoCidade  String?
+  enderecoUf      String?
+  enderecoComplemento String?
+  entregaLatitude  Decimal? @db.Decimal(10, 7)
+  entregaLongitude Decimal? @db.Decimal(10, 7)
+  entregaPrevistaEm DateTime?
+  taxaEntrega     Decimal @default(0) @db.Decimal(14, 2)
+  estoqueBaixado  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itens PedidoItem[]
+  deliveryZone DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([formaPagamento])
+  @@index([tipoAtendimento, createdAt])
+  @@index([deliveryZoneId])
+
+  @@map("pedido")
+}
+
 model PedidoItem {
   id       String @id @default(cuid())
   pedidoId String
   pedido   Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
   produtoId String?
-  produto   Produto? @relation(fields: [produtoId], references: [id]) // ok
+  produto   Produto? @relation(fields: [produtoId], references: [id])
 
   nome       String
   tamanho    Tamanho?
@@ -315,12 +500,10 @@ model PedidoItem {
 
   @@index([pedidoId])
   @@index([produtoId])
+
+  @@map("pedidoitem")
 }
 
-/**
- * Adicionais do item – também como snapshot (nome + preço).
- * Não referencia ProdutoAdicional para não “quebrar” histórico se o produto ou adicionais mudarem.
- */
 model PedidoItemAdicional {
   id String @id @default(cuid())
 
@@ -331,4 +514,6 @@ model PedidoItemAdicional {
   preco Decimal @db.Decimal(14, 2)
 
   @@index([itemId])
+
+  @@map("pedidoitemadicional")
 }

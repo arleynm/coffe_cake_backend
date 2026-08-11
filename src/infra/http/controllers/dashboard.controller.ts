@@ -25,7 +25,7 @@ export class DashboardController {
         numero: p.numero,
         cliente: `Mesa ${p.mesa}`,
         total: p.total,
-        status: mapStatusToLabel(p.status), // "Pago", "Pendente", "Cancelado"
+        status: mapStatusToLabel(p.status),
         hora: formatHour(p.createdAt),
       })),
     };

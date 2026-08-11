@@ -2,15 +2,20 @@
 import { Pedido } from './pedido.entity';
 import type { PedidoStatus } from './pedido.entity';
 
+export type FindManyPedidosParams = {
+  q?: string;
+  status?: PedidoStatus;
+  skip?: number;
+  take?: number;
+  todos?: boolean;
+  mesa?: string; // ✅ AQUI ESTÁ O QUE FALTAVA
+};
+
 export interface IPedidoRepo {
   findById(id: string): Promise<Pedido | null>;
-  findMany(params: {
-    q?: string;
-    status?: PedidoStatus;
-    skip?: number;
-    take?: number;
-    todos?: boolean;      // ⬅️ novo
-  }): Promise<Pedido[]>;
+
+  findMany(params: FindManyPedidosParams): Promise<Pedido[]>;
+
   create(p: Pedido): Promise<Pedido>;
   update(p: Pedido): Promise<Pedido>;
   updateWithItems(p: Pedido): Promise<Pedido>;

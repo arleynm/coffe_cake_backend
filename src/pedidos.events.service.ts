@@ -1,16 +1,42 @@
-// src/pedidos/pedidos.events.service.ts
 import { Injectable } from '@nestjs/common';
-import { Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 
-export type PedidoEvent =
-  | { type: 'pedido.created'|'pedido.updated'|'pedido.status'|'pedido.deleted'|'heartbeat'; data: any };
+export type PedidoEventType =
+  | 'pedido.created'
+  | 'pedido.updated'
+  | 'pedido.deleted';
+
+export type PedidoEvent = {
+  type: PedidoEventType;
+  data: any;
+};
+
+type PedidoEventHandler = (event: PedidoEvent) => void | Promise<void>;
 
 @Injectable()
 export class PedidosEventsService {
   private readonly subject = new Subject<PedidoEvent>();
-  public readonly stream$ = this.subject.asObservable();
+  readonly stream$: Observable<PedidoEvent> = this.subject.asObservable();
 
-  emit(type: PedidoEvent['type'], data: any) {
-    this.subject.next({ type, data });
+  private handlers: Partial<Record<PedidoEventType, PedidoEventHandler[]>> = {};
+
+  on(eventType: PedidoEventType, handler: PedidoEventHandler) {
+    if (!this.handlers[eventType]) {
+      this.handlers[eventType] = [];
+    }
+
+    this.handlers[eventType]!.push(handler);
+  }
+
+  async emit(event: PedidoEvent) {
+    console.log('[PedidosEventsService] emit:', event.type, event.data);
+
+    this.subject.next(event);
+
+    const listeners = this.handlers[event.type] ?? [];
+
+    await Promise.allSettled(
+      listeners.map((handler) => Promise.resolve(handler(event))),
+    );
   }
 }

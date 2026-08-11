@@ -2,7 +2,7 @@ name: Deploy API to VPS
 
 on:
   push:
-    branches: [ main ]   # se sua branch de produção for outra, muda aqui
+    branches: [ main ]  
 
 jobs:
   deploy:
@@ -80,6 +80,12 @@ jobs:
             else
               npm install
             fi
+
+            echo "Gerando client do Prisma (necessário para compilar os testes)..."
+            npx prisma generate
+
+            echo "Rodando testes automatizados (barra o deploy se falhar)..."
+            npm test
 
             echo "Buildando API (NestJS)..."
             npm run build

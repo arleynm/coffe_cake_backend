@@ -18,7 +18,13 @@ export class CreatePedido {
     ));
     const pedido = new Pedido(
       randomUUID(), 0,
-      input.mesa, input.observacoes ?? null, 'RECEBIDO', itens
+      input.mesa, input.observacoes ?? null, 'RECEBIDO', itens,
+      new Date(), new Date(), null,
+      input.tipoAtendimento ?? 'LOCAL', input.clienteNome ?? null, input.clienteTelefone ?? null,
+      input.deliveryZoneId ?? null, input.enderecoCep ?? null, input.enderecoRua ?? null,
+      input.enderecoNumero ?? null, input.enderecoBairro ?? null, input.enderecoCidade ?? null,
+      input.enderecoUf ?? null, input.enderecoComplemento ?? null, input.taxaEntrega ?? 0,
+      input.entregaLatitude ?? null, input.entregaLongitude ?? null, input.entregaPrevistaEm ?? null,
     );
     return this.repo.create(pedido);
   }

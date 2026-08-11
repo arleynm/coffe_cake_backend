@@ -37,4 +37,8 @@ export class CreateProdutoDto {
 
   @IsArray() @IsOptional()
   adicionais?: { nome: string; preco: number; ativo?: boolean }[];
+
+  // Ficha técnica: insumos consumidos por 1 unidade do produto (na unidade base do insumo)
+  @IsArray() @IsOptional()
+  fichaTecnica?: { insumoId: string; quantidade: number }[];
 }

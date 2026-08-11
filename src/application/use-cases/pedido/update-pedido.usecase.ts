@@ -18,6 +18,8 @@ export class UpdatePedido {
         i.quantidade, i.precoUnit, i.obs ?? null,
         (i.adicionais ?? []).map(a => new PedidoItemAdicional(a.nome, a.preco)),
       ));
+      // itens mudaram → precisa substituí-los no banco (update simples não persiste itens)
+      return this.repo.updateWithItems(found);
     }
 
     return this.repo.update(found);

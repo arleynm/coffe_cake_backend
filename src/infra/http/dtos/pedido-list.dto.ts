@@ -1,5 +1,4 @@
-// src/infra/http/dtos/pedido-list.dto.ts
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min, IsIn } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export type PedidoStatusBE = 'RECEBIDO' | 'PREPARO' | 'PRONTO' | 'ENTREGUE' | 'CANCELADO';
@@ -10,7 +9,7 @@ export class ListPedidoQueryDTO {
   q?: string;
 
   @IsOptional()
-  @IsEnum(['RECEBIDO','PREPARO','PRONTO','ENTREGUE','CANCELADO'])
+  @IsIn(['RECEBIDO', 'PREPARO', 'PRONTO', 'ENTREGUE', 'CANCELADO'])
   status?: PedidoStatusBE;
 
   @IsOptional()
@@ -40,4 +39,9 @@ export class ListPedidoQueryDTO {
   @IsInt()
   @Min(1)
   take?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value == null ? undefined : String(value)))
+  @IsString()
+  mesa?: string;
 }

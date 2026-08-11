@@ -41,7 +41,10 @@ export class PedidosService {
     });
 
     const fe = this.toFE(created);
-    this.eventBus.emit('pedido.created', fe);
+    this.eventBus.emit({
+      type: 'pedido.created',
+      data: fe,
+    });
     return fe;
   }
 
@@ -83,7 +86,10 @@ export class PedidosService {
       });
 
       const fe = this.toFE(updated);
-      this.eventBus.emit('pedido.updated', fe);
+      this.eventBus.emit({
+        type: 'pedido.updated',
+        data: fe,
+      });
       return fe;
     }
 
@@ -98,7 +104,10 @@ export class PedidosService {
     });
 
     const fe = this.toFE(updated);
-    this.eventBus.emit('pedido.updated', fe);
+    this.eventBus.emit({
+    type: 'pedido.updated',
+    data: fe,
+  });
     return fe;
   }
 
@@ -113,13 +122,19 @@ export class PedidosService {
     });
 
     const fe = this.toFE(p);
-    this.eventBus.emit('pedido.status', fe);
+    this.eventBus.emit({
+      type: 'pedido.updated',
+      data: fe,
+    });
     return fe;
   }
 
   async remove(id: string) {
     await this.prisma.pedido.delete({ where: { id } });
-    this.eventBus.emit('pedido.deleted', { id });
+    this.eventBus.emit({
+      type: 'pedido.deleted',
+      data: { id },
+    });
   }
 
   // ========= Helpers =========

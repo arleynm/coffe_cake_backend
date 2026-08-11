@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { CategoriaCardapioRepository } from '../../domain/cardapio/categoria.repository';
 import { CategoriaCardapioEntity } from '../../domain/cardapio/categoria.entity';
@@ -39,7 +39,28 @@ export class PrismaCategoriaRepository implements CategoriaCardapioRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await this.prisma.categoriaCardapio.delete({ where: { id } });
+    const categoria = await this.prisma.categoriaCardapio.findUnique({
+      where: { id },
+      select: { id: true, nome: true },
+    });
+
+    if (!categoria) {
+      throw new NotFoundException('Categoria não encontrada.');
+    }
+
+    const produtosVinculados = await this.prisma.produto.count({
+      where: { categoriaId: id },
+    });
+
+    if (produtosVinculados > 0) {
+      throw new BadRequestException(
+        `Não é possível excluir a categoria "${categoria.nome}" porque ela está vinculada a ${produtosVinculados} produto(s).`
+      );
+    }
+
+    await this.prisma.categoriaCardapio.delete({
+      where: { id },
+    });
   }
 
   async findById(id: string) {
@@ -52,39 +73,38 @@ export class PrismaCategoriaRepository implements CategoriaCardapioRepository {
     return c ? map(c) : null;
   }
 
- async list(params: {
+  async list(params: {
     q?: string; ativo?: boolean; page?: number; pageSize?: number;
     orderBy?: 'nome'|'ordem'|'createdAt'|'updatedAt'; orderDir?: 'asc'|'desc';
-    }) {
+  }) {
     const {
-        q,
-        ativo,
-        orderBy = 'ordem',
-        orderDir = 'asc',
+      q,
+      ativo,
+      orderBy = 'ordem',
+      orderDir = 'asc',
     } = params ?? {};
 
-    // paginação segura
     const pageNum = Number(params?.page ?? 1);
     const pageSizeNum = Number(params?.pageSize ?? 20);
     const hasValidPagination =
-        Number.isFinite(pageNum) &&
-        Number.isFinite(pageSizeNum) &&
-        pageNum > 0 &&
-        pageSizeNum > 0;
+      Number.isFinite(pageNum) &&
+      Number.isFinite(pageSizeNum) &&
+      pageNum > 0 &&
+      pageSizeNum > 0;
 
     const skip = hasValidPagination ? (pageNum - 1) * pageSizeNum : undefined;
     const take = hasValidPagination ? pageSizeNum : undefined;
 
     const where: any = {
-        ...(q
+      ...(q
         ? {
             OR: [
-                { nome: { contains: q, mode: 'insensitive' } },
-                { slug: { contains: q, mode: 'insensitive' } },
+              { nome: { contains: q, mode: 'insensitive' } },
+              { slug: { contains: q, mode: 'insensitive' } },
             ],
-            }
+          }
         : {}),
-        ...(ativo !== undefined ? { ativo } : {}),
+      ...(ativo !== undefined ? { ativo } : {}),
     };
 
     const allowed = new Set(['nome', 'ordem', 'createdAt', 'updatedAt']);
@@ -92,15 +112,14 @@ export class PrismaCategoriaRepository implements CategoriaCardapioRepository {
     const dir = orderDir === 'desc' ? 'desc' : 'asc';
 
     const [rows, total] = await this.prisma.$transaction([
-        this.prisma.categoriaCardapio.findMany({
+      this.prisma.categoriaCardapio.findMany({
         where,
         orderBy: { [orderField]: dir },
-        ...(hasValidPagination ? { skip, take } : {}), // 👈 só envia se válido
-        }),
-        this.prisma.categoriaCardapio.count({ where }),
+        ...(hasValidPagination ? { skip, take } : {}),
+      }),
+      this.prisma.categoriaCardapio.count({ where }),
     ]);
 
     return { items: rows.map(map), total };
-    }
-
+  }
 }

@@ -31,6 +31,21 @@ export class ItemDTO {
 export class CreatePedidoHttpDTO {
   @IsString() @IsNotEmpty() mesa!: string;
   @IsOptional() @IsString() observacoes?: string;
+  @IsOptional() @IsIn(['LOCAL','RETIRADA','ENTREGA']) tipoAtendimento?: 'LOCAL'|'RETIRADA'|'ENTREGA';
+  @IsOptional() @IsString() clienteNome?: string;
+  @IsOptional() @IsString() clienteTelefone?: string;
+  @IsOptional() @IsString() deliveryZoneId?: string;
+  @IsOptional() @IsString() enderecoCep?: string;
+  @IsOptional() @IsString() enderecoRua?: string;
+  @IsOptional() @IsString() enderecoNumero?: string;
+  @IsOptional() @IsString() enderecoBairro?: string;
+  @IsOptional() @IsString() enderecoCidade?: string;
+  @IsOptional() @IsString() enderecoUf?: string;
+  @IsOptional() @IsString() enderecoComplemento?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) taxaEntrega?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() entregaLatitude?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() entregaLongitude?: number;
+  @IsOptional() entregaPrevistaEm?: Date;
   @IsArray() @ValidateNested({ each: true }) @Type(() => ItemDTO)
   itens!: ItemDTO[];
 }

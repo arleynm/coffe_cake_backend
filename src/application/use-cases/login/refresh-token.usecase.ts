@@ -18,23 +18,24 @@ export class RefreshTokenUseCase {
 
     await this.tokens.revokeById(record.id);
     const refreshTtlSec = Math.floor((record.expiresAt.getTime() - Date.now()) / 1000);
-    const { refreshToken, refreshTokenHash, exp } = await this.tokens.generateRefresh(refreshTtlSec);
+    const { refreshToken, refreshTokenHash, refreshTokenSha, exp } = await this.tokens.generateRefresh(refreshTtlSec);
     await this.tokens.storeRefresh({
       userId: user.id,
       hashed: refreshTokenHash,
+      sha256: refreshTokenSha,
       userAgent: input.userAgent,
       ip: input.ip,
       expiresAt: new Date(exp * 1000),
     });
 
     const accessTtlSec = Number(process.env.JWT_ACCESS_TTL_SEC ?? 900);
-    const accessToken = await this.tokens.signAccess({ sub: user.id, email: user.email }, accessTtlSec);
+    const accessToken = await this.tokens.signAccess({ sub: user.id, email: user.email, role: user.role }, accessTtlSec);
 
     return {
       message: 'Token renovado com sucesso',
       accessToken,
       refreshToken,
-      user: { id: user.id, email: user.email, nome: user.nome },
+      user: { id: user.id, email: user.email, nome: user.nome, role: user.role },
     };
   }
 }

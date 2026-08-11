@@ -10,6 +10,16 @@ import { Prisma } from '@prisma/client';
 export class PedidoPrismaRepo implements IPedidoRepo {
   constructor(private prisma: PrismaService) {}
 
+  /** Contagem de pedidos ativos (não entregues/cancelados) separados por loja e delivery. */
+  async countPendentes(): Promise<{ loja: number; delivery: number }> {
+    const ativos = ['RECEBIDO', 'PREPARO', 'PRONTO'] as any;
+    const [loja, delivery] = await Promise.all([
+      this.prisma.pedido.count({ where: { status: { in: ativos }, tipoAtendimento: { in: ['LOCAL', 'RETIRADA'] as any } } }),
+      this.prisma.pedido.count({ where: { status: { in: ativos }, tipoAtendimento: 'ENTREGA' as any } }),
+    ]);
+    return { loja, delivery };
+  }
+
   async findById(id: string): Promise<Pedido | null> {
     const raw = await this.prisma.pedido.findUnique({
       where: { id },
@@ -24,34 +34,37 @@ export class PedidoPrismaRepo implements IPedidoRepo {
     skip?: number;
     take?: number;
     todos?: boolean;
+    mesa?: string;
   } = {}): Promise<Pedido[]> {
-    const { q, status, skip, take, todos } = params ?? {};
+    const { q, status, skip, take, todos, mesa } = params ?? {};
 
-    // saneia paginação
     const safeSkip = Number.isFinite(skip as number) ? (skip as number) : 0;
     const safeTake = Number.isFinite(take as number) ? (take as number) : 50;
 
     const or: Prisma.PedidoWhereInput[] = [];
     if (q) {
-      or.push({ mesa: { contains: q } }); // ← sem `mode`
+      or.push({ mesa: { contains: q } });
       const n = Number(q);
       if (!Number.isNaN(n)) or.push({ numero: n } as any);
     }
 
     const where: Prisma.PedidoWhereInput = {};
+
     if (or.length) where.OR = or;
+
+    if (mesa != null && mesa !== '') {
+      where.mesa = String(mesa);
+    }
 
     if (status != null && status !== '') {
       (where as any).status = status;
     } else if (!todos) {
-      // regra padrão: ocultar ENTREGUE quando status não foi especificado
-      (where as any).status = { not: 'ENTREGUE' };
+      (where as any).status = { not: 'CANCELADO' };
     }
-    // se todos=true e status não veio, não filtra status
 
     const raws = await this.prisma.pedido.findMany({
       where,
-      orderBy: { createdAt: 'desc' }, // ou { numero: 'desc' } se preferir
+      orderBy: { createdAt: 'desc' },
       skip: safeSkip,
       take: safeTake,
       include: { itens: { include: { adicionais: true } } },

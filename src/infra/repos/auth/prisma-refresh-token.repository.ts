@@ -16,6 +16,19 @@ export class PrismaRefreshTokenRepository implements RefreshTokenRepository {
     });
     return r;
   }
+  async findValidBySha256(sha256: string) {
+    const r = await this.prisma.refreshToken.findFirst({
+      where: { sha256, revokedAt: null, expiresAt: { gt: new Date() } },
+    });
+    return r;
+  }
+  async findLegacyValidCandidates(limit: number) {
+    return this.prisma.refreshToken.findMany({
+      where: { sha256: null, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
   async revokeById(id: string) {
     await this.prisma.refreshToken.update({ where: { id }, data: { revokedAt: new Date() } });
   }

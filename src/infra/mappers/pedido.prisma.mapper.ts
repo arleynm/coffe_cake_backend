@@ -25,6 +25,13 @@ export const PedidoPrismaMapper = {
       raw.createdAt,
       raw.updatedAt,
       raw.formaPagamento ?? null, // mantém no domínio como null quando não houver
+      raw.tipoAtendimento ?? 'LOCAL', raw.clienteNome ?? null, raw.clienteTelefone ?? null,
+      raw.deliveryZoneId ?? null, raw.enderecoCep ?? null, raw.enderecoRua ?? null,
+      raw.enderecoNumero ?? null, raw.enderecoBairro ?? null, raw.enderecoCidade ?? null,
+      raw.enderecoUf ?? null, raw.enderecoComplemento ?? null, Number(raw.taxaEntrega ?? 0),
+      raw.entregaLatitude == null ? null : Number(raw.entregaLatitude),
+      raw.entregaLongitude == null ? null : Number(raw.entregaLongitude),
+      raw.entregaPrevistaEm ?? null,
     );
   },
 
@@ -36,6 +43,21 @@ export const PedidoPrismaMapper = {
       observacoes: p.observacoes ?? null,
       status: p.status as any,
       total: p.total(), // se sua coluna é Decimal e você quiser, pode usar new Prisma.Decimal(p.total())
+      tipoAtendimento: p.tipoAtendimento,
+      clienteNome: p.clienteNome,
+      clienteTelefone: p.clienteTelefone,
+      enderecoCep: p.enderecoCep,
+      enderecoRua: p.enderecoRua,
+      enderecoNumero: p.enderecoNumero,
+      enderecoBairro: p.enderecoBairro,
+      enderecoCidade: p.enderecoCidade,
+      enderecoUf: p.enderecoUf,
+      enderecoComplemento: p.enderecoComplemento,
+      taxaEntrega: p.taxaEntrega,
+      entregaLatitude: p.entregaLatitude,
+      entregaLongitude: p.entregaLongitude,
+      entregaPrevistaEm: p.entregaPrevistaEm,
+      ...(p.deliveryZoneId ? { deliveryZone: { connect: { id: p.deliveryZoneId } } } : {}),
       itens: {
         create: p.itens.map(it => ({
           id: it.id,

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -24,7 +25,9 @@ const parseOrigins = (env?: string) =>
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: true }),
+    // trustProxy: estamos atrás do Caddy; usa X-Forwarded-For como IP real do cliente
+    // (essencial para o rate limiting por IP e para registrar o IP correto nos refresh tokens).
+    new FastifyAdapter({ logger: true, trustProxy: true }),
   );
 
   app.setGlobalPrefix('api');
@@ -83,13 +86,27 @@ async function bootstrap() {
   });
 
   const fastify = app.getHttpAdapter().getInstance();
+  const uploadsRoot = join(process.cwd(), 'public', 'uploads');
+
   await fastify.register(fastifyStatic, {
-    root: join(process.cwd(), 'public', 'uploads'),
-    prefix: '/uploads/', 
+    root: uploadsRoot,
+    prefix: '/uploads/',
     decorateReply: false,
+    setHeaders: (res, pathName) => {
+      // Em dev: não cacheia
+      if (process.env.NODE_ENV !== 'production') {
+        res.setHeader('Cache-Control', 'no-store');
+      }
+    },
   });
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
   app.enableShutdownHooks();
 
   const config = new DocumentBuilder()
@@ -110,7 +127,6 @@ async function bootstrap() {
     customSiteTitle: 'Coffe Cake — Swagger',
   });
 
-  // 🔹 Scalar em /api/docs
   await fastify.register((await import('@scalar/fastify-api-reference')).default, {
     routePrefix: '/api/docs',
     configuration: { url: '/api/openapi.json' },

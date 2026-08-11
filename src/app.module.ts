@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './infra/db/prisma.module';
 import { AuthModule } from './infra/auth/auth.module';
+import { JwtAuthGuard } from './infra/auth/jwt.guard';
 
 // ----- Ports (domain - estoque)
 import { UnidadeRepository } from './domain/estoque/repositories/unidade.repository';
@@ -105,7 +108,8 @@ import { PedidoCompraController } from './infra/http/controllers/pedido-compra.c
 import { LoteController } from './infra/http/controllers/lote.controller';
 import { ProdutoController } from './infra/http/controllers/produto.controller';
 import { CategoriaController } from './infra/http/controllers/categoria.controller';
-// ===== Controller: MEDIA
+import { AppNotificationRepository } from './domain/notification/app-notification.repository';
+import { AppNotificationPrismaRepo } from './infra/repos/notification/app-notification.prisma.repo';
 import { MediaController } from './infra/http/controllers/media.controller';
 
 import { PedidoController } from './infra/http/controllers/pedido.controller';
@@ -115,12 +119,28 @@ import { PedidosEventsController } from './infra/http/controllers/pedidos.events
 import { PedidosEventsService } from './pedidos.events.service';
 
 import { PedidosService } from './pedidos.service';
+import { BaixaEstoquePedidoService } from './application/services/baixa-estoque-pedido.service';
 
 // ===== Controller: DASHBOARD
 import { DashboardController } from './infra/http/controllers/dashboard.controller';
 
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'node:path';
+import { NotificationController } from './infra/http/controllers/notification.controller';
+import { NotificationTokenRepository } from './domain/notification/notification-token.repository';
+import { NotificationTokenPrismaRepo } from './infra/repos/notification/notification-token.prisma.repo';
+import { FirebaseAdminService } from './shared/firebase/firebase-admin.service';
+import { FirebaseMessagingService } from './shared/firebase/firebase-messaging.service';
+import { PedidosEventsListener } from './pedidos.events.listener';
+import { DeliveryController } from './delivery/delivery.controller';
+import { DeliveryService } from './delivery/delivery.service';
+import { DeliveryEventsService } from './delivery/delivery-events.service';
+import { FinanceiroController } from './financeiro/financeiro.controller';
+import { FinanceiroService } from './financeiro/financeiro.service';
+import { CaixaController } from './caixa/caixa.controller';
+import { CaixaService } from './caixa/caixa.service';
+import { MenuEventsController } from './menu/menu.events.controller';
+import { MenuEventsService } from './menu/menu-events.service';
 
 @Module({
   imports: [
@@ -128,12 +148,15 @@ import { join } from 'node:path';
       rootPath: join(process.cwd(), 'public'),
       serveRoot: '/',
     }),
-
+    // Rate limiting: fallback padrão de 60 req/min por IP.
+    // Rotas sensíveis (login, criar pedido) usam limites mais estritos via @Throttle.
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 60_000, limit: 60 },
+    ]),
     PrismaModule,
     AuthModule,
   ],
   controllers: [
-    // estoque
     UnidadeController,
     PedidoController,
     DepositoController,
@@ -141,82 +164,85 @@ import { join } from 'node:path';
     MovimentoController,
     PedidoCompraController,
     LoteController,
-    // cardápio
     ProdutoController,
     CategoriaController,
-    // media
     MediaController,
     PedidosEventsController,
     DashboardController,
+    NotificationController,
+    DeliveryController,
+    FinanceiroController,
+    CaixaController,
+    MenuEventsController,
   ],
   providers: [
+    // 🔒 Guard global: toda rota exige JWT por padrão.
+    // Use @Public() para liberar rotas específicas (cardápio, criar pedido, delivery público).
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+
     PedidoPrismaRepo,
-    { provide: UnidadeRepository,   useClass: PrismaUnidadeRepository },
-    { provide: DepositoRepository,  useClass: PrismaDepositoRepository },
-    { provide: InsumoRepository,    useClass: PrismaInsumoRepository },
-    { provide: LoteRepository,      useClass: PrismaLoteRepository },
+
+    { provide: AppNotificationRepository, useClass: AppNotificationPrismaRepo },
+    { provide: NotificationTokenRepository, useClass: NotificationTokenPrismaRepo },
+
+    { provide: UnidadeRepository, useClass: PrismaUnidadeRepository },
+    { provide: DepositoRepository, useClass: PrismaDepositoRepository },
+    { provide: InsumoRepository, useClass: PrismaInsumoRepository },
+    { provide: LoteRepository, useClass: PrismaLoteRepository },
     { provide: MovimentoRepository, useClass: PrismaMovimentoRepository },
     { provide: PedidoCompraRepository, useClass: PrismaPedidoCompraRepository },
-
-    { provide: ProdutoRepository,           useClass: PrismaProdutoRepository },
+    { provide: ProdutoRepository, useClass: PrismaProdutoRepository },
     { provide: CategoriaCardapioRepository, useClass: PrismaCategoriaRepository },
-
     { provide: MediaRepository, useClass: PrismaMediaRepository },
-
     { provide: DashboardRepository, useClass: PrismaDashboardRepository },
 
+    FirebaseAdminService,
+    FirebaseMessagingService,
     PedidosEventsService,
+    PedidosEventsListener,
     PedidosService,
+    DeliveryService,
+    DeliveryEventsService,
+    FinanceiroService,
+    CaixaService,
+    MenuEventsService,
+    BaixaEstoquePedidoService,
 
     CreateUnidadeUseCase,
     ListUnidadesUseCase,
     UpdateUnidadeUseCase,
     DeleteUnidadeUseCase,
-
     CreateDepositoUseCase,
     ListDepositosUseCase,
     GetDepositoUseCase,
     UpdateDepositoUseCase,
     UpdateStatusDepositoUseCase,
-
     CreateInsumoUseCase,
     ListInsumosUseCase,
     UpdateInsumoUseCase,
     ToggleInsumoUseCase,
-
     CreateLoteUseCase,
     GetLoteUseCase,
     ListLotesUseCase,
     UpdateLoteUseCase,
-
     EntradaUseCase,
     SaidaUseCase,
     AjusteUseCase,
     TransferenciaUseCase,
-
-    // Use-cases: PEDIDO COMPRA
     CreatePedidoUseCase,
     ListPedidosUseCase,
     ReceberPedidoUseCase,
-
-    // Use-cases: PRODUTO (cardápio)
     CreateProduto,
     UpdateProduto,
     DeleteProduto,
     GetProduto,
     ListProdutos,
-
-    // Use-cases: CATEGORIA (cardápio)
     CreateCategoriaUseCase,
     UpdateCategoriaUseCase,
     GetCategoriaUseCase,
     ListCategoriasUseCase,
     DeleteCategoriaUseCase,
-
-    // Use-case: MEDIA
     UploadMediaUseCase,
-
-    // Use-case: DASHBOARD
     GetDashboardMetricsUseCase,
   ],
 })

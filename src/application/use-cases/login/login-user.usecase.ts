@@ -24,15 +24,16 @@ export class LoginUserUseCase {
 
     const accessTtlSec = Number(process.env.JWT_ACCESS_TTL_SEC ?? 900);
     const refreshTtlSec = input.remember
-      ? Number(process.env.JWT_REFRESH_REMEMBER_TTL_SEC ?? 60 * 60 * 24 * 30)
+      ? Number(process.env.JWT_REFRESH_REMEMBER_TTL_SEC ?? 60 * 60 * 24 * 14)
       : Number(process.env.JWT_REFRESH_TTL_SEC ?? 60 * 60 * 24 * 7);
 
-    const accessToken = await this.tokens.signAccess({ sub: user.id, email: user.email }, accessTtlSec);
-    const { refreshToken, refreshTokenHash, exp } = await this.tokens.generateRefresh(refreshTtlSec);
+    const accessToken = await this.tokens.signAccess({ sub: user.id, email: user.email, role: user.role }, accessTtlSec);
+    const { refreshToken, refreshTokenHash, refreshTokenSha, exp } = await this.tokens.generateRefresh(refreshTtlSec);
 
     await this.tokens.storeRefresh({
       userId: user.id,
       hashed: refreshTokenHash,
+      sha256: refreshTokenSha,
       userAgent: input.userAgent,
       ip: input.ip,
       expiresAt: new Date(exp * 1000),
@@ -40,7 +41,7 @@ export class LoginUserUseCase {
 
     return {
       message: 'Login realizado com sucesso',
-      user: { id: user.id, nome: user.nome, email: user.email },
+      user: { id: user.id, nome: user.nome, email: user.email, role: user.role },
       accessToken,
       refreshToken,
     };

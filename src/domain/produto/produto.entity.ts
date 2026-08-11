@@ -13,6 +13,14 @@ export interface ProdutoAdicional {
   ativo: boolean;
 }
 
+export interface ProdutoInsumoItem {
+  id: string;
+  insumoId: string;
+  insumoNome?: string;
+  unidade?: string; // código da unidade base do insumo (ex.: 'g', 'ml')
+  quantidade: number; // na unidade base do insumo
+}
+
 export class Produto {
   constructor(
     public readonly id: string,
@@ -27,6 +35,7 @@ export class Produto {
     public imagemUrl: string | null,
     public tamanhos: ProdutoTamanho[],
     public adicionais: ProdutoAdicional[],
+    public fichaTecnica: ProdutoInsumoItem[],
     public createdAt: Date,
     public updatedAt: Date,
   ) {}

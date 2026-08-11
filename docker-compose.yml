@@ -1,4 +1,5 @@
 version: "3.9"
+
 services:
   db:
     image: mysql:8.0
@@ -11,7 +12,7 @@ services:
       MYSQL_PASSWORD: app
     command: --default-authentication-plugin=mysql_native_password
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysqldata:/var/lib/mysql
     healthcheck:
@@ -19,5 +20,44 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DATABASE_URL: mysql://app:app@db:3306/appdb
+    container_name: clean_api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "3007"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3007
+      NODE_ENV: production
+      DATABASE_URL: mysql://app:app@db:3306/appdb
+      CORS_ORIGIN: http://localhost:3001,http://localhost:3000,http://coffecake.com.br,http://www.coffecake.com.br,https://coffecake.com.br,https://www.coffecake.com.br
+      JWT_ACCESS_SECRET: um-segredo-bem-aleatorio
+      JWT_REFRESH_SECRET: outro-segredo-bem-aleatorio
+      JWT_ACCESS_TTL_SEC: "900"
+      JWT_REFRESH_TTL_SEC: "604800"
+      JWT_REFRESH_REMEMBER_TTL_SEC: "2592000"
+      COOKIE_SECRET: segredo-dos-cookies
+      COOKIE_ACCESS_MAX_AGE: "900"
+      COOKIE_REFRESH_MAX_AGE: "604800"
+      COOKIE_REFRESH_REMEMBER_MAX_AGE: "2592000"
+    volumes:
+      - ./public/uploads:/app/public/uploads
+    networks:
+      - default
+      - proxy
+
+networks:
+  proxy:
+    external: true
+
 volumes:
   mysqldata:

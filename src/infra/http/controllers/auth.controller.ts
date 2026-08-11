@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards,
+  Body, Controller, Get, HttpCode, Post, Req, Res, UnauthorizedException, UseGuards,
 } from '@nestjs/common';
 import { RegisterDto } from '../dtos/register.dto';
 import { LoginDto } from '../dtos/login.dto';
@@ -11,6 +11,10 @@ import { PrismaUserRepository } from '../../repos/auth/prisma-user.repository';
 import { Argon2PasswordHasher } from '../../crypto/password-hasher';
 import { TokensService } from '../../auth/tokens.service';
 import { JwtAuthGuard } from '../../auth/jwt.guard';
+import { Public } from '../../auth/public.decorator';
+import { Roles } from '../../auth/roles.decorator';
+import { RolesGuard } from '../../auth/roles.guard';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 
 // Swagger decorators
 import { ApiTags, ApiOperation, ApiBody, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
@@ -27,18 +31,20 @@ export class AuthController {
   private logoutUC: LogoutUseCase;
 
   constructor(
-    usersRepo: PrismaUserRepository,
+    private readonly usersRepo: PrismaUserRepository,
     hasher: Argon2PasswordHasher,
     tokens: TokensService,
   ) {
-    this.registerUC = new RegisterUserUseCase(usersRepo, hasher);
-    this.loginUC = new LoginUserUseCase(usersRepo, hasher, tokens);
-    this.refreshUC = new RefreshTokenUseCase(tokens, usersRepo);
+    this.registerUC = new RegisterUserUseCase(this.usersRepo, hasher);
+    this.loginUC = new LoginUserUseCase(this.usersRepo, hasher, tokens);
+    this.refreshUC = new RefreshTokenUseCase(tokens, this.usersRepo);
     this.logoutUC = new LogoutUseCase(tokens);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @Post('register')
-  @ApiOperation({ summary: 'Cadastrar novo usuário' })
+  @ApiOperation({ summary: 'Cadastrar novo usuário (restrito a ADMIN)' })
   @ApiCreatedResponse({ description: 'Usuário criado com sucesso' })
   @ApiBody({
     type: RegisterDto,
@@ -53,6 +59,9 @@ export class AuthController {
     return this.registerUC.execute(dto);
   }
 
+  @Public()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('login')
   @HttpCode(200)
   @ApiOperation({ summary: 'Login. Define cookies access_token e refresh_token' })
@@ -81,6 +90,7 @@ export class AuthController {
     return { user };
   }
 
+  @Public()
   @Post('refresh')
   @HttpCode(200)
   @ApiOperation({ summary: 'Renova access token usando o refresh_token do cookie (rotaciona o refresh)' })
@@ -90,7 +100,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: FastifyReply
   ) {
     const refreshToken = req.cookies?.['refresh_token'] as string | undefined;
-    if (!refreshToken) throw new Error('Sem refresh token');
+    if (!refreshToken) throw new UnauthorizedException('Sem refresh token');
 
     const { user, accessToken, refreshToken: newRefresh } = await this.refreshUC.execute({
       refreshToken,
@@ -103,6 +113,7 @@ export class AuthController {
     return { user };
   }
 
+  @Public()
   @Post('logout')
   @HttpCode(200)
   @ApiOperation({ summary: 'Logout. Revoga refresh token e limpa cookies' })
@@ -123,8 +134,13 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Retorna o usuário autenticado (via access_token no cookie)' })
   @ApiOkResponse({ description: 'Usuário autenticado' })
-  me(@Req() req: any) {
-    return { sub: req.user.sub, email: req.user.email };
+  async me(@Req() req: { user: { sub: string; email: string; role: string } }) {
+    const user = await this.usersRepo.findById(req.user.sub);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Usuário inativo');
+    }
+
+    return { id: user.id, sub: user.id, nome: user.nome, email: user.email, role: user.role };
   }
 
   // Em Fastify, maxAge é em SEGUNDOS
@@ -132,8 +148,16 @@ export class AuthController {
     const isProd = process.env.NODE_ENV === 'production';
     const accessMaxAgeSec = Number(process.env.COOKIE_ACCESS_MAX_AGE ?? 15 * 60); // 15m
     const refreshMaxAgeSec = remember
-      ? Number(process.env.COOKIE_REFRESH_REMEMBER_MAX_AGE ?? 30 * 24 * 60 * 60)
+      ? Number(process.env.COOKIE_REFRESH_REMEMBER_MAX_AGE ?? 14 * 24 * 60 * 60)
       : Number(process.env.COOKIE_REFRESH_MAX_AGE ?? 7 * 24 * 60 * 60);
+
+    // Remove o cookie legado que era criado num path incompatível com /api/auth.
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProd,
+      path: '/auth',
+    });
 
     res.setCookie('access_token', access, {
       httpOnly: true,
@@ -148,7 +172,7 @@ export class AuthController {
       sameSite: 'lax',
       secure: isProd,
       maxAge: refreshMaxAgeSec,
-      path: '/auth', // opcional: restringir a /auth
+      path: '/',
     });
 
     res.setCookie('remember', remember ? '1' : '0', {
@@ -165,7 +189,7 @@ export class AuthController {
     const base = { path: '/', sameSite: 'lax' as const, secure: isProd, httpOnly: true as const };
 
     res.clearCookie('access_token', base);
-    res.clearCookie('refresh_token', { ...base, path: '/auth' });
+    res.clearCookie('refresh_token', base);
     res.clearCookie('remember', { path: '/', sameSite: 'lax', secure: isProd, httpOnly: false });
   }
 }

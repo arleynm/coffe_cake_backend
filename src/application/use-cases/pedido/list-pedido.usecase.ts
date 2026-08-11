@@ -1,4 +1,3 @@
-// src/application/use-cases/pedido/list-pedido.usecase.ts
 import { IPedidoRepo } from '../../../domain/pedido/pedido.repo';
 import type { PedidoStatus } from '../../../domain/pedido/pedido.entity';
 
@@ -8,6 +7,7 @@ type ListParams = {
   skip?: number;
   take?: number;
   todos?: boolean;
+  mesa?: string;
 };
 
 export class ListPedido {
@@ -20,8 +20,9 @@ export class ListPedido {
       skip = 0,
       take = 50,
       todos = false,
+      mesa,
     } = params;
 
-    return this.repo.findMany({ q, status, skip, take, todos });
+    return this.repo.findMany({ q, status, skip, take, todos, mesa });
   }
 }

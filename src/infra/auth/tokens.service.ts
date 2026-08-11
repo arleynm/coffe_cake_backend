@@ -11,20 +11,27 @@ export class TokensService {
 
   constructor(private refreshRepo: PrismaRefreshTokenRepository) {}
 
-  async signAccess(payload: { sub: string; email: string }, ttlSec: number) {
+  async signAccess(payload: { sub: string; email: string; role: string }, ttlSec: number) {
     return jwt.sign(payload, this.accessSecret, { expiresIn: ttlSec });
+  }
+
+  private sha256(token: string) {
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 
   async generateRefresh(ttlSec: number) {
     const raw = crypto.randomBytes(64).toString('base64url');
     const refreshToken = raw;
+    // O token é aleatório de 64 bytes (alta entropia): o SHA-256 serve de índice O(1)
+    // para lookup, e o argon2 permanece como defesa em profundidade.
     const refreshTokenHash = await argon2.hash(refreshToken);
+    const refreshTokenSha = this.sha256(refreshToken);
     const exp = Math.floor(Date.now() / 1000) + ttlSec;
-    return { refreshToken, refreshTokenHash, exp };
+    return { refreshToken, refreshTokenHash, refreshTokenSha, exp };
   }
 
   async storeRefresh(params: {
-    userId: string; hashed: string; userAgent?: string; ip?: string; expiresAt: Date;
+    userId: string; hashed: string; sha256?: string; userAgent?: string; ip?: string; expiresAt: Date;
   }) {
     return this.refreshRepo.create(params);
   }
@@ -37,24 +44,15 @@ export class TokensService {
   }
 
   async findValidRefresh(refreshToken: string) {
-    // Buscar todos tokens não revogados e não expirados (poderia filtrar por userId se tiver no cookie)
-    // Melhor: faça lookup pelo usuário primeiro (via sessão) — aqui faremos varredura (pode otimizar).
-    // Implementação prática: crie um índice reverso guardando SHA256 em col extra. Simples agora:
-    const sha = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    // => ajuste schema p/ ter column 'sha256' se quiser O(1). Aqui faremos fallback:
-    // Vamos pegar todos não expirados e testar argon2.verify (poucos por usuário).
-    const now = new Date();
+    // 1) Caminho rápido O(1): lookup direto pelo índice único de sha256.
+    const sha = this.sha256(refreshToken);
+    const byIndex = await this.refreshRepo.findValidBySha256(sha);
+    if (byIndex) return byIndex;
 
-    // Otimização simples: liste últimos tokens e verifique
-    // Como não temos userId aqui, você pode armazenar userId no cookie em outro cookie assinado (opcional).
-    // Para manter exemplo enxuto, busque os últimos 50:
-    const candidates = await (this.refreshRepo as any).prisma.refreshToken.findMany({
-      where: { revokedAt: null, expiresAt: { gt: now } },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
-
-    for (const c of candidates) {
+    // 2) Fallback para tokens legados (emitidos antes da coluna sha256): verifica via argon2.
+    //    Some naturalmente conforme esses tokens expiram/rotacionam.
+    const legacy = await this.refreshRepo.findLegacyValidCandidates(50);
+    for (const c of legacy) {
       const ok = await argon2.verify(c.hashed, refreshToken);
       if (ok) return c;
     }

@@ -7,6 +7,8 @@ import { DeleteCategoriaUseCase } from '../../../application/use-cases/categoria
 import { CreateCategoriaDto } from '../../http/dtos/create-categoria.dto';
 import { UpdateCategoriaDto, IdParamDto } from '../../http/dtos/update-categoria.dto';
 import { QueryCategoriaDto } from '../../http/dtos/query-categoria.dto';
+import { Public } from '../../auth/public.decorator';
+import { MenuEventsService } from '../../../menu/menu-events.service';
 
 @Controller('categorias')
 export class CategoriaController {
@@ -16,26 +18,31 @@ export class CategoriaController {
     private readonly getUC: GetCategoriaUseCase,
     private readonly listUC: ListCategoriasUseCase,
     private readonly deleteUC: DeleteCategoriaUseCase,
+    private readonly menuEvents: MenuEventsService,
   ) {}
 
   @Post()
   async create(@Body() dto: CreateCategoriaDto) {
     const c = await this.createUC.exec(dto);
+    this.menuEvents.emit('categoria.created', { id: (c as any)?.id ?? null });
     return { data: c };
   }
 
   @Put(':id')
   async update(@Param() { id }: IdParamDto, @Body() dto: UpdateCategoriaDto) {
     const c = await this.updateUC.exec({ id, patch: dto });
+    this.menuEvents.emit('categoria.updated', { id });
     return { data: c };
   }
 
+  @Public()
   @Get(':id')
   async get(@Param() { id }: IdParamDto) {
     const c = await this.getUC.exec(id);
     return { data: c };
   }
 
+  @Public()
   @Get()
   async list(@Query() q: QueryCategoriaDto) {
     const res = await this.listUC.exec({
@@ -52,6 +59,7 @@ export class CategoriaController {
   @Delete(':id')
   async delete(@Param() { id }: IdParamDto) {
     await this.deleteUC.exec(id);
+    this.menuEvents.emit('categoria.deleted', { id });
     return { ok: true };
   }
 }

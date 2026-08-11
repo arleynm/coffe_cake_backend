@@ -27,10 +27,24 @@ function mapToDomain(p: any): Produto {
       preco: Number(a.preco),
       ativo: a.ativo,
     })),
+    (p.fichaTecnica ?? []).map((f: any) => ({
+      id: f.id,
+      insumoId: f.insumoId,
+      insumoNome: f.insumo?.nome,
+      unidade: f.insumo?.unidadeBase?.codigo,
+      quantidade: Number(f.quantidade),
+    })),
     p.createdAt,
     p.updatedAt,
   );
 }
+
+// include reutilizável para carregar o produto completo
+const PRODUTO_INCLUDE = {
+  tamanhos: true,
+  adicionais: true,
+  fichaTecnica: { include: { insumo: { include: { unidadeBase: true } } } },
+} as const;
 
 @Injectable()
 export class PrismaProdutoRepository implements ProdutoRepository {
@@ -45,7 +59,7 @@ export class PrismaProdutoRepository implements ProdutoRepository {
 
     try {
       const created = await this.prisma.produto.create({
-        include: { tamanhos: true, adicionais: true },
+        include: PRODUTO_INCLUDE,
         data: {
           nome: data.nome,
           categoriaId: data.categoriaId, // precisa existir!
@@ -62,6 +76,11 @@ export class PrismaProdutoRepository implements ProdutoRepository {
           adicionais: data.adicionais?.length
             ? { create: data.adicionais.map(a => ({ nome: a.nome, preco: a.preco, ativo: a.ativo })) }
             : undefined,
+          fichaTecnica: data.fichaTecnica?.length
+            ? { create: data.fichaTecnica
+                .filter(f => f.insumoId && Number(f.quantidade) > 0)
+                .map(f => ({ insumoId: f.insumoId, quantidade: Number(f.quantidade) })) }
+            : undefined,
         },
       });
       return mapToDomain(created);
@@ -74,8 +93,8 @@ export class PrismaProdutoRepository implements ProdutoRepository {
   }
 
   async update(id: string, patch: Partial<Omit<Produto, 'id'|'createdAt'|'updatedAt'>>): Promise<Produto> {
-    // Para tamanhos/adicionais, fazemos upsert simples:
-    const { tamanhos, adicionais, ...rest } = patch;
+    // Para tamanhos/adicionais/fichaTecnica, fazemos upsert simples (apaga e recria):
+    const { tamanhos, adicionais, fichaTecnica, ...rest } = patch;
 
     const updated = await this.prisma.produto.update({
       where: { id },
@@ -98,8 +117,18 @@ export class PrismaProdutoRepository implements ProdutoRepository {
               },
             }
           : {}),
+        ...(fichaTecnica
+          ? {
+              fichaTecnica: {
+                deleteMany: { produtoId: id },
+                create: fichaTecnica
+                  .filter(f => f.insumoId && Number(f.quantidade) > 0)
+                  .map(f => ({ insumoId: f.insumoId, quantidade: Number(f.quantidade) })),
+              },
+            }
+          : {}),
       },
-      include: { tamanhos: true, adicionais: true },
+      include: PRODUTO_INCLUDE,
     });
 
     return mapToDomain(updated);
@@ -112,7 +141,7 @@ export class PrismaProdutoRepository implements ProdutoRepository {
   async findById(id: string): Promise<Produto | null> {
     const p = await this.prisma.produto.findUnique({
       where: { id },
-      include: { tamanhos: true, adicionais: true },
+      include: PRODUTO_INCLUDE,
     });
     return p ? mapToDomain(p) : null;
   }
@@ -171,7 +200,7 @@ export class PrismaProdutoRepository implements ProdutoRepository {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.produto.findMany({
         where,
-        include: { tamanhos: true, adicionais: true },
+        include: PRODUTO_INCLUDE,
         orderBy: { [orderField]: dir },
         ...(hasValidPagination ? { skip, take } : {}), // 👈 só envia se válido
       }),
