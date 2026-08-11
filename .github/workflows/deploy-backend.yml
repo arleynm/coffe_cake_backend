@@ -32,6 +32,10 @@ jobs:
             # === Ajuste aqui o nome do repositório do backend no GitHub ===
             REPO_URL="https://$GH_PAT@github.com/arleynm/coffe_cake_backend.git"
 
+            # A pasta pertence ao usuário 'deploy'; o deploy pode rodar como outro
+            # usuário (ex.: root). Marca o dir como seguro p/ evitar "dubious ownership".
+            git config --global --add safe.directory "$APP_DIR" || true
+
             echo "Verificando se o diretório $APP_DIR existe..."
 
             if [ ! -d "$APP_DIR/.git" ]; then
