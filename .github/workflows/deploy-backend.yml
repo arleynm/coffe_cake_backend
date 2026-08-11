@@ -102,12 +102,11 @@ jobs:
             npx prisma db push
 
             echo "Subindo API com PM2 (processo: coffe-cake-api)..."
-            if pm2 describe coffe-cake-api > /dev/null 2>&1; then
-              pm2 restart coffe-cake-api
-            else
-              # se preferir usar ecosystem.config.cjs, podemos trocar aqui depois
-              pm2 start "node dist/main.js" --name coffe-cake-api
-            fi
+            # delete + start (em vez de restart) garante que o processo rode o
+            # build ATUAL deste diretório. `pm2 restart` mantinha o caminho antigo
+            # do processo e servia código velho.
+            pm2 delete coffe-cake-api 2>/dev/null || true
+            pm2 start "node dist/main.js" --name coffe-cake-api --cwd "$APP_DIR"
 
             pm2 save
         env:
