@@ -150,10 +150,20 @@ export class DeliveryService {
   /** Geocodifica o endereço da loja e salva lat/lng na config (define o centro dos anéis). */
   async setLojaEndereco(input: { cep?: string; bairro?: string; rua?: string; numero?: string; cidade?: string; uf?: string }) {
     const geo = await this.geocode(input);
+    const endereco = {
+      lojaLatitude: geo.latitude,
+      lojaLongitude: geo.longitude,
+      lojaCep: input.cep ?? undefined,
+      lojaRua: input.rua ?? undefined,
+      lojaNumero: input.numero ?? undefined,
+      lojaBairro: input.bairro ?? undefined,
+      lojaCidade: input.cidade ?? undefined,
+      lojaUf: input.uf ?? undefined,
+    };
     const config = await this.prisma.deliveryConfig.upsert({
       where: { id: 'default' },
-      create: { id: 'default', lojaLatitude: geo.latitude, lojaLongitude: geo.longitude },
-      update: { lojaLatitude: geo.latitude, lojaLongitude: geo.longitude },
+      create: { id: 'default', ...endereco },
+      update: endereco,
     });
     this.events.emit('delivery.config.updated', config);
     return { config, latitude: geo.latitude, longitude: geo.longitude, enderecoResolvido: geo.displayName };

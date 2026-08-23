@@ -360,6 +360,12 @@ model DeliveryConfig {
   pedidoMinimo    Decimal  @default(0) @db.Decimal(14, 2)
   lojaLatitude    Decimal? @db.Decimal(10, 7)
   lojaLongitude   Decimal? @db.Decimal(10, 7)
+  lojaCep         String?
+  lojaRua         String?
+  lojaNumero      String?
+  lojaBairro      String?
+  lojaCidade      String?
+  lojaUf          String?
   mapaZoom        Int      @default(13)
   cobrarPorKm     Boolean  @default(false)
   taxaBaseKm      Decimal  @default(0) @db.Decimal(14, 2)
