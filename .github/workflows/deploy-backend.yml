@@ -74,10 +74,7 @@ jobs:
             node -v
             npm -v
 
-            echo "Instalando pm2 globalmente (se ainda não tiver)..."
-            npm install -g pm2
-
-            echo "Instalando dependências da API..."
+            echo "Instalando dependências (para prisma CLI + testes)..."
             cd "$APP_DIR"
             if [ -f package-lock.json ]; then
               npm ci
@@ -91,9 +88,6 @@ jobs:
             echo "Rodando testes automatizados (barra o deploy se falhar)..."
             npm test
 
-            echo "Buildando API (NestJS)..."
-            npm run build
-
             # Sincroniza o schema com o banco de forma ADITIVA e SEGURA.
             # SEM --accept-data-loss de propósito: aplica colunas/tabelas novas
             # preservando os dados; se detectar qualquer mudança destrutiva,
@@ -101,13 +95,15 @@ jobs:
             echo "Aplicando schema no banco (aditivo, sem apagar dados)..."
             npx prisma db push
 
-            echo "Subindo API com PM2 (processo: coffe-cake-api)..."
-            # delete + start (em vez de restart) garante que o processo rode o
-            # build ATUAL deste diretório. `pm2 restart` mantinha o caminho antigo
-            # do processo e servia código velho.
-            pm2 delete coffe-cake-api 2>/dev/null || true
-            pm2 start "node dist/main.js" --name coffe-cake-api --cwd "$APP_DIR"
+            # A produção roda em container Docker (clean_api), servido pelo Caddy.
+            # Rebuildamos o container com o código novo — é o que atualiza a API.
+            echo "Rebuildando o container da API (Docker)..."
+            docker compose up -d --build api
 
-            pm2 save
+            echo "Limpando imagens antigas..."
+            docker image prune -f || true
+
+            echo "Status:"
+            docker compose ps
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
