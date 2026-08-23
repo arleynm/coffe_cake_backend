@@ -169,6 +169,26 @@ export class DeliveryService {
     return { config, latitude: geo.latitude, longitude: geo.longitude, enderecoResolvido: geo.displayName };
   }
 
+  /** Remove o endereço/localização salvos da loja. */
+  async clearLojaEndereco() {
+    const config = await this.prisma.deliveryConfig.upsert({
+      where: { id: 'default' },
+      create: { id: 'default' },
+      update: {
+        lojaLatitude: null,
+        lojaLongitude: null,
+        lojaCep: null,
+        lojaRua: null,
+        lojaNumero: null,
+        lojaBairro: null,
+        lojaCidade: null,
+        lojaUf: null,
+      },
+    });
+    this.events.emit('delivery.config.updated', config);
+    return config;
+  }
+
   /** Gera anéis concêntricos (estilo iFood) a partir da loja. Substitui as zonas por raio existentes. */
   async gerarZonasAutomaticas(input: { quantidade?: number; raioBaseKm?: number; incrementoKm?: number; taxaBase?: number; incrementoTaxa?: number; pedidoMinimo?: number; tempoMinimo?: number | null; tempoMaximo?: number | null }) {
     const cfg = await this.config();

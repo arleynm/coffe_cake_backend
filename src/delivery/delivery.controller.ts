@@ -17,6 +17,7 @@ export class DeliveryController {
   @UseGuards(JwtAuthGuard) @Get('admin') async admin() { return { config: await this.delivery.config(), zones: await this.delivery.listZones() }; }
   @UseGuards(JwtAuthGuard) @Patch('config') config(@Body() body: Record<string, unknown>) { return this.delivery.updateConfig(body); }
   @UseGuards(JwtAuthGuard) @Post('loja/geocode') setLoja(@Body() body: { cep?: string; bairro?: string; rua?: string; numero?: string; cidade?: string; uf?: string }) { return this.delivery.setLojaEndereco(body); }
+  @UseGuards(JwtAuthGuard) @Delete('loja') clearLoja() { return this.delivery.clearLojaEndereco(); }
   @UseGuards(JwtAuthGuard) @Post('zones/gerar') gerar(@Body() body: any) { return this.delivery.gerarZonasAutomaticas(body); }
   @UseGuards(JwtAuthGuard) @Post('zones') createZone(@Body() body: any) { return this.delivery.createZone(body); }
   @UseGuards(JwtAuthGuard) @Patch('zones/:id') updateZone(@Param('id') id: string, @Body() body: any) { return this.delivery.updateZone(id, body); }
