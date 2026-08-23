@@ -88,8 +88,9 @@ export class PedidoPrismaRepo implements IPedidoRepo {
         mesa: p.mesa,
         observacoes: p.observacoes ?? null,
         status: p.status as any,
-        // se o domínio já tiver formaPagamento
-        // formaPagamento: (p as any).formaPagamento as any,
+        // persiste a forma de pagamento (definida ao pagar/entregar);
+        // como toDomain sempre traz o valor atual, um simples status change preserva.
+        formaPagamento: ((p as any).formaPagamento ?? null) as any,
         total: p.total(),
         updatedAt: new Date(),
       },
